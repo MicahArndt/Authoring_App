@@ -1,10 +1,15 @@
 package enamel;
 
-import java.io.*;
-import java.util.*;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Scanner;
+import java.util.logging.FileHandler;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
-import java.util.logging.*;
 
 import com.sun.speech.freetts.Voice;
 import com.sun.speech.freetts.VoiceManager;
@@ -13,6 +18,8 @@ public class ScenarioParser {
 	private Voice voice;
 	private VoiceManager vm;
 	private Scanner fileScanner;
+	public Scanner nextLineCheck; // This is so that audio player can check the next line. - micah
+	public String nextLineChecker;// to go with nextLineCheck scanner. - micah
 	private int cellNum;
 	private int buttonNum;
 	public Player player;
@@ -27,7 +34,8 @@ public class ScenarioParser {
 		//String currDir = System.getProperty("user.dir");
         //System.setProperty("mbrola.base", currDir + File.separator + "lib/mbrola.jar");
         vm = VoiceManager.getInstance();
-        voice = vm.getVoice ("kevin16");
+        voice = vm.getVoice ("Kevin16");
+        System.out.println(vm==null);
         voice.allocate();
         repeatedText = new ArrayList<String> ();
         userInput = false;
@@ -58,6 +66,9 @@ public class ScenarioParser {
 	 */
 	void skip(String indicator) {
 		while (fileScanner.hasNextLine()) {
+			if (nextLineCheck.hasNextLine()) {
+				nextLineCheck.nextLine();
+			}
 			if (fileScanner.nextLine().equals("/~" + indicator)) {
 				break;
 			}
@@ -66,6 +77,7 @@ public class ScenarioParser {
 		// that exists in the scenario file.
 		if (!fileScanner.hasNextLine()) {
 			fileScanner.close();
+			nextLineCheck.close();
 			errorLog("Exception error: IllegalArgumentException",
 					"Expected the keyphrase: \n" + "/~" + indicator
 							+ " \n ,somewhere in the scenario file, to indicate where "
@@ -95,7 +107,7 @@ public class ScenarioParser {
 		} else {
 			// The key phrase to indicate to play a sound file.
 			if (fileLine.length() >= 8 && fileLine.substring(0, 8).equals("/~sound:")) {
-				playSound(fileLine.substring(8).trim());
+				playSound(fileLine.substring(8));
 			}
 			// The key phrase to indicate to skip to another part of the
 			// scenario.
@@ -386,17 +398,34 @@ public class ScenarioParser {
 	private void play() {
 		String fileLine;
 		try {
+			// this scanner is going to lead file scanner by one line
+			// gives audio player ability to see next line 
+		for (int i=0; i<=4; i++) {	
+			if (nextLineCheck.hasNextLine()) {
+				nextLineCheck.nextLine();
+			}
+		}
 			while (fileScanner.hasNextLine()) {
+				
+
+				
 				// This while loop is created to wait for a user to press a
 				// button.
 				while (userInput) {
 					Thread.sleep(400);
 				}
+				if(nextLineCheck.hasNextLine()) {
+					nextLineChecker = nextLineCheck.nextLine();
+				}
+				
 				fileLine = fileScanner.nextLine();
+				System.out.println("This is FileLine: " + fileLine);
+				System.out.println("This is NextLineChecker: " + nextLineChecker);
 				performAction(fileLine);
 			}
 			if (!fileScanner.hasNextLine()) {
 				fileScanner.close();
+				nextLineCheck.close();
 				// The if statement is created to check if there is an
 				// /~endrepeat for a previously
 				// declared /~repeat in the scenario file.
@@ -411,11 +440,13 @@ public class ScenarioParser {
 				exit();
 			}
 		} catch (Exception e) {
+			System.out.println(e.toString());
 			errorLog("Exception error : " + e.toString(),
 					"Strange error occurred if you are able to read this message. Possibilities "
 							+ "could include possible file corruption, or that you have enter characters that "
 							+ "could not be read/interpreted.");
 		}
+	
 	}
 
 	/*
@@ -502,17 +533,21 @@ public class ScenarioParser {
 		try {
 			cellNum = Integer.parseInt(fileScanner.nextLine().split("\\s")[1]);
 			buttonNum = Integer.parseInt(fileScanner.nextLine().split("\\s")[1]);
+			fileScanner.nextLine();
+			performAction(fileScanner.nextLine());
 			if (isVisual)
 			    player = new VisualPlayer(cellNum, buttonNum);
 			else
 			    player =  new AudioPlayer(cellNum, buttonNum);
 		} catch (Exception e) {
-
-			errorLog("Exception error: " + e.toString(),
-					"Expected format: Cell num1 \n Button num2 \n "
+			VisualPlayer vPlayer = new VisualPlayer(1, 1);
+			String error1 = "Exception error: " + e.toString();
+			String error2 = 		"Expected format: Cell num1 \n Button num2 \n "
 							+ "as the first two lines of the scenarion file, and where num1 and num2 are positive integers. \n"
 							+ "Did not receive such a format in the scenario file and program had to end due to the incorrect"
-							+ "file format.");
+							+ "file format.";
+			vPlayer.setLabel(error2);
+			errorLog(error1, error2);
 		}
 	}
 
@@ -525,6 +560,7 @@ public class ScenarioParser {
 
 			File f = new File(scenarioFile);
 			fileScanner = new Scanner(f);
+			nextLineCheck = new Scanner(f); // identical scanner
 			String absolutePath = f.getAbsolutePath();
 			scenarioFilePath = absolutePath.substring(0, absolutePath.lastIndexOf(File.separator));
 			setCellAndButton();
